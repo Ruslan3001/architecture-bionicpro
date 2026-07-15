@@ -106,6 +106,11 @@ architecture-bionicpro/
 │   ├── Dockerfile
 │   ├── package.json
 │   └── tsconfig.json
+├── report-service/                 # API отчётности (FastAPI + ClickHouse)
+│   ├── src/
+│   │   └── main.py                # Эндпоинт /reports с проверкой JWT (Keycloak)
+│   ├── Dockerfile
+│   └── requirements.txt
 ├── frontend/                       # Веб-приложение (React + TypeScript)
 │   └── src/
 │       ├── App.tsx                # Главный компонент (работа через session cookie)

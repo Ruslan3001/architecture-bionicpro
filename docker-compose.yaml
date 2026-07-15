@@ -157,6 +157,27 @@ services:
       - source_db
       - clickhouse
 
+  report-service:
+    build:
+      context: ./report-service
+      dockerfile: Dockerfile
+    environment:
+      DEBUG: "false"
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: "9000"
+      CLICKHOUSE_DB: reports
+      CLICKHOUSE_USER: reports
+      CLICKHOUSE_PASSWORD: reports_password
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: reports-realm
+      KEYCLOAK_CLIENT_ID: reports-api
+      KEYCLOAK_CLIENT_SECRET: oNwoLQdvJAvRcL89SydqCWCe5ry1jMgq
+    ports:
+      - "8000:8000"
+    depends_on:
+      - clickhouse
+      - keycloak
+
 volumes:
   clickhouse-data:
   airflow-db-data:

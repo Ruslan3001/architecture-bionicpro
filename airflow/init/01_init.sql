@@ -33,18 +33,18 @@ CREATE TABLE IF NOT EXISTS telemetry.sensor_data (
 
 -- Тестовые данные
 INSERT INTO crm.clients (external_user_id, full_name, email) VALUES
-('user-1', 'Иван Иванов', 'ivan@example.com'),
-('user-2', 'Пётр Петров', 'peter@example.com')
+('prothetic1', 'Иван Иванов', 'ivan@example.com'),
+('prothetic2', 'Пётр Петров', 'peter@example.com')
 ON CONFLICT (external_user_id) DO NOTHING;
 
 INSERT INTO crm.prosthetics (client_id, model, serial_number, issued_at) VALUES
-((SELECT id FROM crm.clients WHERE external_user_id = 'user-1'), 'BionicPRO-100', 'SN001', '2025-01-15'),
-((SELECT id FROM crm.clients WHERE external_user_id = 'user-2'), 'BionicPRO-200', 'SN002', '2025-02-10')
+((SELECT id FROM crm.clients WHERE external_user_id = 'prothetic1'), 'BionicPRO-100', 'SN001', '2025-01-15'),
+((SELECT id FROM crm.clients WHERE external_user_id = 'prothetic2'), 'BionicPRO-200', 'SN002', '2025-02-10')
 ON CONFLICT (serial_number) DO NOTHING;
 
 INSERT INTO telemetry.sensor_data (external_user_id, recorded_at, movement_type, signal_value, response_time_ms)
 SELECT
-    'user-1',
+    'prothetic1',
     NOW() - (INTERVAL '1 day' * (RANDOM() * 2)::int) - (RANDOM() * INTERVAL '12 hours'),
     (ARRAY['grip', 'pinch', 'open', 'close'])[(RANDOM() * 4)::int + 1],
     0.5 + RANDOM() * 0.5,
@@ -53,7 +53,7 @@ FROM generate_series(1, 50);
 
 INSERT INTO telemetry.sensor_data (external_user_id, recorded_at, movement_type, signal_value, response_time_ms)
 SELECT
-    'user-2',
+    'prothetic2',
     NOW() - (INTERVAL '1 day' * (RANDOM() * 2)::int) - (RANDOM() * INTERVAL '12 hours'),
     (ARRAY['grip', 'pinch', 'open', 'close'])[(RANDOM() * 4)::int + 1],
     0.4 + RANDOM() * 0.6,
