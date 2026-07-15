@@ -40,3 +40,123 @@ services:
       REACT_APP_KEYCLOAK_URL: http://127.0.0.1:8080
       REACT_APP_KEYCLOAK_REALM: reports-realm
       REACT_APP_KEYCLOAK_CLIENT_ID: reports-frontend
+
+  source_db:
+    image: postgres:14
+    environment:
+      POSTGRES_DB: source_db
+      POSTGRES_USER: source_admin
+      POSTGRES_PASSWORD: source_password
+    volumes:
+      - ./airflow/init:/docker-entrypoint-initdb.d
+    ports:
+      - "5435:5432"
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:23.8
+    environment:
+      CLICKHOUSE_USER: reports
+      CLICKHOUSE_PASSWORD: reports_password
+      CLICKHOUSE_DB: reports
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+
+  airflow_db:
+    image: postgres:14
+    environment:
+      POSTGRES_DB: airflow
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+    volumes:
+      - airflow-db-data:/var/lib/postgresql/data
+
+  airflow-init:
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow_db:5432/airflow
+    command: >
+      bash -c "airflow db migrate &&
+               airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@example.com || true"
+    depends_on:
+      - airflow_db
+
+  airflow-webserver:
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow_db:5432/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
+      CRM_DB_HOST: source_db
+      CRM_DB_PORT: "5432"
+      CRM_DB_NAME: source_db
+      CRM_DB_USER: source_admin
+      CRM_DB_PASSWORD: source_password
+      CRM_DB_SCHEMA: crm
+      TELEMETRY_DB_HOST: source_db
+      TELEMETRY_DB_PORT: "5432"
+      TELEMETRY_DB_NAME: source_db
+      TELEMETRY_DB_USER: source_admin
+      TELEMETRY_DB_PASSWORD: source_password
+      TELEMETRY_DB_SCHEMA: telemetry
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: "9000"
+      CLICKHOUSE_DB: reports
+      CLICKHOUSE_USER: reports
+      CLICKHOUSE_PASSWORD: reports_password
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+    ports:
+      - "8081:8080"
+    command: webserver
+    depends_on:
+      - airflow_db
+      - airflow-init
+      - source_db
+      - clickhouse
+
+  airflow-scheduler:
+    build:
+      context: ./airflow
+      dockerfile: Dockerfile
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow_db:5432/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      CRM_DB_HOST: source_db
+      CRM_DB_PORT: "5432"
+      CRM_DB_NAME: source_db
+      CRM_DB_USER: source_admin
+      CRM_DB_PASSWORD: source_password
+      CRM_DB_SCHEMA: crm
+      TELEMETRY_DB_HOST: source_db
+      TELEMETRY_DB_PORT: "5432"
+      TELEMETRY_DB_NAME: source_db
+      TELEMETRY_DB_USER: source_admin
+      TELEMETRY_DB_PASSWORD: source_password
+      TELEMETRY_DB_SCHEMA: telemetry
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: "9000"
+      CLICKHOUSE_DB: reports
+      CLICKHOUSE_USER: reports
+      CLICKHOUSE_PASSWORD: reports_password
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+    command: scheduler
+    depends_on:
+      - airflow_db
+      - airflow-init
+      - source_db
+      - clickhouse
+
+volumes:
+  clickhouse-data:
+  airflow-db-data:

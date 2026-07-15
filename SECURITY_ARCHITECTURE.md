@@ -87,6 +87,13 @@
 
 ```text
 architecture-bionicpro/
+├── airflow/                        # ETL на Apache Airflow
+│   ├── dags/
+│   │   └── reports_mart_dag.py    # DAG формирования витрины отчётности в ClickHouse
+│   ├── init/
+│   │   └── 01_init.sql            # Тестовые схемы CRM и Telemetry
+│   ├── Dockerfile
+│   └── requirements.txt
 ├── bff-service/                    # BFF / API Gateway сервис
 │   ├── src/
 │   │   ├── index.ts               # Точка входа Express
@@ -107,7 +114,7 @@ architecture-bionicpro/
 ├── keycloak/
 │   └── realm-export.json          # Экспорт реалма BionicPRO (клиенты, RBAC, IdP mappers)
 ├── docker-compose.yaml             # Оркестрация инфраструктуры и сервисов
-└── BionicPRO_C4_model_security.drawio.xml  # Архитектурная диаграмма C4 (To-Be)
+└── BionicPRO_C4_model_security.drawio  # Архитектурная диаграмма C4 (To-Be)
 
 ```
 
@@ -134,8 +141,8 @@ docker compose up -d
 
 ## Изменения в диаграмме C4 (To-Be)
 
-Финальная архитектура отражена в файле `BionicPRO_C4_model_security.drawio.xml`.
-[Финальная архитектура отражена в файле `BionicPRO_C4_model_security.drawio.xml`](SECURITY_ARCHITECTURE.md)
+Финальная архитектура отражена в файле `BionicPRO_C4_model_security.drawio`.
+[Финальная архитектура отражена в файле `BionicPRO_C4_model_security.drawio`](SECURITY_ARCHITECTURE.md)
 
 **Ключевые архитектурные обновления:**
 
