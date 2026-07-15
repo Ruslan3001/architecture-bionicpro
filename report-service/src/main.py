@@ -138,6 +138,12 @@ def get_reports(
     """
     user_id = current_user["user_id"]
 
+    if "prothetic_user" not in current_user.get("roles", []):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Report access is restricted to prothetic users",
+        )
+
     today = date.today()
     if period_to is None:
         period_to = today - timedelta(days=1)
