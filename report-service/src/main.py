@@ -5,17 +5,20 @@ Reports API для BionicPRO.
 о работе протеза из витрины ClickHouse. Доступ возможен только после
 аутентификации через Keycloak, и пользователь может запросить только
 собственный отчёт.
+
+Проверка JWT выполняется локально по публичному ключу Keycloak (JWKS).
 """
 from __future__ import annotations
 
 from datetime import date, timedelta
 from typing import Any
 
-import requests
+import jwt
 from clickhouse_driver import Client
 from fastapi import Depends, FastAPI, HTTPException, Query, Security, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jwt import PyJWKClient
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
@@ -35,10 +38,11 @@ class Settings(BaseSettings):
     clickhouse_mart_table: str = "prosthesis_report_mart"
 
     # Keycloak
+    # URL для получения JWKS внутри Docker-сети
     keycloak_url: str = "http://keycloak:8080"
+    # Issuer, который указан в токене (совпадает с REACT_APP_KEYCLOAK_URL у фронтенда)
+    keycloak_issuer_url: str = "http://localhost:8080"
     keycloak_realm: str = "reports-realm"
-    keycloak_client_id: str = "reports-api"
-    keycloak_client_secret: str = "oNwoLQdvJAvRcL89SydqCWCe5ry1jMgq"
 
     class Config:
         env_prefix = ""
@@ -70,40 +74,74 @@ def _clickhouse_client() -> Client:
     )
 
 
-def _introspect_token(token: str) -> dict[str, Any]:
-    """Проверяет токен через Keycloak Token Introspection Endpoint."""
-    url = (
+def _decode_token(token: str) -> dict[str, Any]:
+    """Локальная проверка JWT через публичный ключ Keycloak (JWKS)."""
+    import logging
+
+    logger = logging.getLogger(__name__)
+    jwks_url = (
         f"{settings.keycloak_url}/realms/{settings.keycloak_realm}"
-        "/protocol/openid-connect/token/introspect"
+        "/protocol/openid-connect/certs"
     )
-    data = {
-        "token": token,
-        "client_id": settings.keycloak_client_id,
-        "client_secret": settings.keycloak_client_secret,
+    # Поддерживаем несколько возможных issuer'ов: UI может обращаться к Keycloak
+    # как через localhost, так и через 127.0.0.1.
+    expected_issuers = {
+        f"{settings.keycloak_issuer_url}/realms/{settings.keycloak_realm}",
+        "http://127.0.0.1:8080/realms/reports-realm",
+        "http://localhost:8080/realms/reports-realm",
     }
+
     try:
-        response = requests.post(url, data=data, timeout=5)
-        response.raise_for_status()
-    except requests.RequestException as exc:
+        jwks_client = PyJWKClient(jwks_url)
+        signing_key = jwks_client.get_signing_key_from_jwt(token)
+        # Проверяем подпись и срок действия, но issuer проверяем вручную,
+        # потому что PyJWT принимает только один вариант.
+        payload = jwt.decode(
+            token,
+            signing_key.key,
+            algorithms=["RS256"],
+            options={"verify_iss": False},
+        )
+    except jwt.ExpiredSignatureError as exc:
+        logger.warning("JWT expired: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token expired",
+        ) from exc
+    except jwt.PyJWTError as exc:
+        logger.warning("JWT invalid: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid token: {exc}",
+        ) from exc
+    except Exception as exc:
+        logger.exception("Auth service unavailable")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Auth service unavailable: {exc}",
-        )
+        ) from exc
 
-    payload = response.json()
-    if not payload.get("active"):
+    token_issuer = payload.get("iss")
+    if token_issuer not in expected_issuers:
+        logger.warning(
+            "JWT invalid issuer: got %s, expected one of %s",
+            token_issuer,
+            expected_issuers,
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
+            detail="Invalid issuer",
         )
+
     return payload
+
 
 
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Security(oauth2_scheme),
 ) -> dict[str, Any]:
     """Извлекает идентификатор текущего пользователя из Bearer-токена."""
-    payload = _introspect_token(credentials.credentials)
+    payload = _decode_token(credentials.credentials)
     # Внешний идентификатор пользователя в CRM/ClickHouse совпадает с preferred_username
     user_id = payload.get("preferred_username") or payload.get("sub")
     if not user_id:
@@ -206,6 +244,41 @@ def get_reports(
         "period_to": period_to.isoformat(),
         "count": len(reports),
         "reports": reports,
+    }
+
+
+@app.get("/reports/availability", summary="Доступный диапазон дат отчёта")
+def reports_availability(
+    current_user: dict[str, Any] = Depends(get_current_user),
+) -> dict[str, Any]:
+    """
+    Возвращает минимальную и максимальную дату, за которые есть готовые
+    агрегированные данные в витрине ClickHouse для текущего пользователя.
+    """
+    user_id = current_user["user_id"]
+
+    if "prothetic_user" not in current_user.get("roles", []):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Report access is restricted to prothetic users",
+        )
+
+    client = _clickhouse_client()
+    query = f"""
+        SELECT
+            min(report_date) AS min_date,
+            max(report_date) AS max_date
+        FROM {settings.clickhouse_mart_table}
+        WHERE external_user_id = %(user_id)s
+    """
+    rows = client.execute(query, {"user_id": user_id})
+    min_date, max_date = rows[0] if rows else (None, None)
+
+    return {
+        "user_id": user_id,
+        "min_date": min_date.isoformat() if min_date else None,
+        "max_date": max_date.isoformat() if max_date else None,
+        "has_data": min_date is not None,
     }
 
 

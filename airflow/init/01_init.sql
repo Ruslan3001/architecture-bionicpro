@@ -46,7 +46,7 @@ INSERT INTO telemetry.sensor_data (external_user_id, recorded_at, movement_type,
 SELECT
     'prothetic1',
     NOW() - (INTERVAL '1 day' * (RANDOM() * 2)::int) - (RANDOM() * INTERVAL '12 hours'),
-    (ARRAY['grip', 'pinch', 'open', 'close'])[(RANDOM() * 4)::int + 1],
+    (ARRAY['grip', 'pinch', 'open', 'close'])[1 + FLOOR(RANDOM() * 4)::int],
     0.5 + RANDOM() * 0.5,
     50 + (RANDOM() * 100)::int
 FROM generate_series(1, 50);
@@ -55,7 +55,7 @@ INSERT INTO telemetry.sensor_data (external_user_id, recorded_at, movement_type,
 SELECT
     'prothetic2',
     NOW() - (INTERVAL '1 day' * (RANDOM() * 2)::int) - (RANDOM() * INTERVAL '12 hours'),
-    (ARRAY['grip', 'pinch', 'open', 'close'])[(RANDOM() * 4)::int + 1],
+    (ARRAY['grip', 'pinch', 'open', 'close'])[1 + FLOOR(RANDOM() * 4)::int],
     0.4 + RANDOM() * 0.6,
     60 + (RANDOM() * 120)::int
 FROM generate_series(1, 40);

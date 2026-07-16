@@ -3,6 +3,7 @@ version: '3.8'
 services:
   keycloak_db:
     image: postgres:14
+    restart: unless-stopped
     environment:
       POSTGRES_DB: keycloak_db
       POSTGRES_USER: keycloak_user
@@ -13,6 +14,7 @@ services:
       - "5433:5432"
   keycloak:
     image: quay.io/keycloak/keycloak:21.1
+    restart: unless-stopped
     environment:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
@@ -33,16 +35,18 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
       REACT_APP_API_URL: http://127.0.0.1:8000
-      REACT_APP_KEYCLOAK_URL: http://127.0.0.1:8080
+      REACT_APP_KEYCLOAK_URL: http://localhost:8080
       REACT_APP_KEYCLOAK_REALM: reports-realm
       REACT_APP_KEYCLOAK_CLIENT_ID: reports-frontend
 
   source_db:
     image: postgres:14
+    restart: unless-stopped
     environment:
       POSTGRES_DB: source_db
       POSTGRES_USER: source_admin
@@ -54,6 +58,7 @@ services:
 
   clickhouse:
     image: clickhouse/clickhouse-server:23.8
+    restart: unless-stopped
     environment:
       CLICKHOUSE_USER: reports
       CLICKHOUSE_PASSWORD: reports_password
@@ -66,6 +71,7 @@ services:
 
   airflow_db:
     image: postgres:14
+    restart: unless-stopped
     environment:
       POSTGRES_DB: airflow
       POSTGRES_USER: airflow
@@ -90,10 +96,12 @@ services:
     build:
       context: ./airflow
       dockerfile: Dockerfile
+    restart: unless-stopped
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow_db:5432/airflow
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__WEBSERVER__WEB_SERVER_MASTER_TIMEOUT: "300"
       AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
       CRM_DB_HOST: source_db
       CRM_DB_PORT: "5432"
@@ -127,6 +135,7 @@ services:
     build:
       context: ./airflow
       dockerfile: Dockerfile
+    restart: unless-stopped
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow_db:5432/airflow
@@ -161,6 +170,7 @@ services:
     build:
       context: ./report-service
       dockerfile: Dockerfile
+    restart: unless-stopped
     environment:
       DEBUG: "false"
       CLICKHOUSE_HOST: clickhouse
@@ -169,9 +179,8 @@ services:
       CLICKHOUSE_USER: reports
       CLICKHOUSE_PASSWORD: reports_password
       KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_ISSUER_URL: http://localhost:8080
       KEYCLOAK_REALM: reports-realm
-      KEYCLOAK_CLIENT_ID: reports-api
-      KEYCLOAK_CLIENT_SECRET: oNwoLQdvJAvRcL89SydqCWCe5ry1jMgq
     ports:
       - "8000:8000"
     depends_on:

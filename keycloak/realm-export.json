@@ -1,6 +1,9 @@
 {
     "realm": "reports-realm",
     "enabled": true,
+    "accessTokenLifespan": 3600,
+    "ssoSessionIdleTimeout": 86400,
+    "ssoSessionMaxLifespan": 86400,
     "roles": {
       "realm": [
         {
